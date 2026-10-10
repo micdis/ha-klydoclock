@@ -11,7 +11,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -26,7 +26,10 @@ from .const import (
     DISPLAY_NIGHT,
     DISPLAY_OFF,
     DOMAIN,
+    KEY_NEXT,
+    KEY_PREVIOUS,
     KEY_SLEEP,
+    NAV_BATCH,
     SCAN_INTERVAL,
     SETTINGS_PATH,
 )
@@ -45,6 +48,7 @@ class KlydoState:
     klydo_id: str | None
     klydo: Klydo | None
     favorites: list[str] = field(default_factory=list)
+    favorite_names: list[str] = field(default_factory=list)
     feed: list[str] = field(default_factory=list)
     artist: str | None = None
 
@@ -169,12 +173,17 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
             raise UpdateFailed(str(err)) from err
 
         klydo = self.catalog.get(klydo_id) if klydo_id else None
+        favorites = _json_list(settings.get("favorites_value"))
         return KlydoState(
             settings=settings,
             klydo_id=klydo_id,
             klydo=klydo,
             artist=self.artists.get(klydo.creator) if klydo and klydo.creator else None,
-            favorites=_json_list(settings.get("favorites_value")),
+            favorites=favorites,
+            favorite_names=[
+                entry.name if (entry := self.catalog.get(fav)) else fav
+                for fav in favorites
+            ],
             feed=_json_list(settings.get("feeds_value")),
         )
 
@@ -191,6 +200,78 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
         self.config_entry.async_create_background_task(
             self.hass, _refresh_later(), f"{DOMAIN}_refresh_after_key"
         )
+
+    def resolve_klydo_id(self, value: str) -> str:
+        """Translate a klydo id or name into an id from the catalog."""
+        value = value.strip()
+        if value in self.catalog:
+            return value
+        matches = [
+            k.id for k in self.catalog.values() if k.name.casefold() == value.casefold()
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if not matches:
+            raise ServiceValidationError(f"The clock knows no klydo named '{value}'")
+        raise ServiceValidationError(
+            f"{len(matches)} klydos are named '{value}'; use the klydo id instead"
+        )
+
+    async def async_show_klydo(self, klydo_id: str) -> None:
+        """Walk the feed with next/previous keys until klydo_id is on display."""
+        async with self._display_lock:
+            try:
+                state = await self._async_update_data()
+                if (mode := state.setting("mode")) != "FEED":
+                    raise HomeAssistantError(
+                        f"Selecting a klydo needs the clock in FEED mode, not {mode}"
+                    )
+                presses = 0
+                budget = int(len(state.feed) * 1.5) + 10
+                wrap = True  # assume next wraps from the last feed entry to the first
+                while state.klydo_id != klydo_id:
+                    feed = state.feed
+                    if klydo_id not in feed:
+                        raise HomeAssistantError("This klydo is not in the clock's feed")
+                    if state.klydo_id not in feed:
+                        raise HomeAssistantError(
+                            "The klydo on display is not part of the feed"
+                        )
+                    cur, tgt = feed.index(state.klydo_id), feed.index(klydo_id)
+                    forward = (tgt - cur) % len(feed)
+                    backward = (cur - tgt) % len(feed)
+                    if wrap:
+                        steps, key = (
+                            (forward, KEY_NEXT)
+                            if forward <= backward
+                            else (backward, KEY_PREVIOUS)
+                        )
+                    elif tgt > cur:
+                        steps, key = tgt - cur, KEY_NEXT
+                    else:
+                        steps, key = cur - tgt, KEY_PREVIOUS
+                    batch = min(steps, NAV_BATCH)
+                    presses += batch
+                    if presses > budget:
+                        raise HomeAssistantError(
+                            f"Klydo not reached after {presses} key presses"
+                        )
+                    await self.adb.shell(
+                        "input keyevent " + " ".join([str(key)] * batch)
+                    )
+                    await asyncio.sleep(1.0)  # the app persists a change within ~0.3 s
+                    before = state.klydo_id
+                    state = await self._async_update_data()
+                    if state.klydo_id == before:
+                        if not wrap:
+                            raise HomeAssistantError(
+                                "Klydoclock did not react to the navigation keys"
+                            )
+                        wrap = False  # maybe the feed does not wrap; go the direct way
+            except UpdateFailed as err:
+                raise HomeAssistantError(f"Klydoclock: {err}") from err
+            finally:
+                await self.async_refresh()
 
     async def async_set_display_mode(self, target: str) -> None:
         """Press the sleep key until the display is in the wanted mode."""

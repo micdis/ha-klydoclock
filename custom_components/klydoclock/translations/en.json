@@ -8,6 +8,14 @@
           "host": "IP address",
           "port": "ADB port"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Klydoclock",
+        "description": "Change the address under which the clock is reached.",
+        "data": {
+          "host": "IP address",
+          "port": "ADB port"
+        }
       }
     },
     "error": {
@@ -16,7 +24,9 @@
       "no_root": "The clock refused root access, so its settings cannot be read."
     },
     "abort": {
-      "already_configured": "This clock is already set up."
+      "already_configured": "This clock is already set up.",
+      "reconfigure_successful": "The new address was saved.",
+      "unique_id_mismatch": "This address belongs to a different clock."
     }
   },
   "entity": {
@@ -78,11 +88,30 @@
           "night": "Night (red)",
           "off": "Off"
         }
+      },
+      "favorite_klydo": {
+        "name": "Favorite klydo"
       }
     },
     "switch": {
       "display": {
         "name": "Display"
+      }
+    }
+  },
+  "services": {
+    "show_klydo": {
+      "name": "Show klydo",
+      "description": "Walks the clock's feed with next/previous until the given klydo is on display. Takes a few seconds per step; the clock must be in FEED mode.",
+      "fields": {
+        "klydo": {
+          "name": "Klydo",
+          "description": "Name or id of the klydo, as known to the clock."
+        },
+        "device_id": {
+          "name": "Device",
+          "description": "The clock to control. Only needed when more than one is set up."
+        }
       }
     }
   }

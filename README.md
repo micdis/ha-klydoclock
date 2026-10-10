@@ -15,10 +15,14 @@ by Klydo.
 | Sensor **Artist** | Creator of the current klydo |
 | Binary sensor **Favorite** | On while the current klydo is a favorite |
 | Select **Display mode** | Bright, Medium, Dim, Night (red), Off |
+| Select **Favorite klydo** | Jump to one of your favorites (see below) |
 | Switch **Display** | Display off / back on at full brightness |
 | Buttons | Next klydo, Previous klydo, Toggle favorite, Info, Settings, Sleep key |
-| Sensors **Brightness level**, **Favorites** | App brightness level, number of favorites |
+| Sensors **Brightness level**, **Favorites** | App brightness level, number of favorites; the favorites' ids and names as attributes |
 | Diagnostic sensors | Screen state, night mode, mode |
+
+There is also an action **klydoclock.show_klydo** that walks the clock to any
+klydo it knows, by name or id.
 
 ## How it works
 
@@ -32,8 +36,29 @@ is open on the local network and allows root.
   (bright → medium → dim → night → off → bright) and checks after every press
   that the clock followed.
 
-There is no way to jump straight to a specific klydo; the app only offers
-next and previous.
+## Selecting a klydo
+
+The app has no interface to jump straight to a specific klydo; it only offers
+next and previous. **Favorite klydo** and `klydoclock.show_klydo` therefore
+walk through the feed with next/previous keys (batched, verified after every
+batch) until the wanted klydo is on display:
+
+```yaml
+actions:
+  - action: klydoclock.show_klydo
+    data:
+      klydo: "Steamboat Willie"   # or a klydo id
+```
+
+Worth knowing:
+
+- The clock must be in **FEED mode** (its normal state), and the klydo must be
+  in the feed. In the firmware this was developed against, the feed contains
+  every klydo on the clock.
+- Each step takes a moment; a jump across the feed can take up to half a
+  minute. Nearby klydos arrive in a few seconds.
+- Every klydo passed on the way counts as briefly viewed in the app's
+  statistics.
 
 ## Requirements
 

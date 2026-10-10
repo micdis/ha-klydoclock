@@ -16,6 +16,13 @@ ARTISTS_PATH = f"{DATA_DIR}/files/datastore/cache_artists.preferences_pb"
 
 ADB_KEY_FILE = "klydoclock_adbkey"
 
+SERVICE_SHOW_KLYDO = "show_klydo"
+ATTR_KLYDO = "klydo"
+
+# Several keys sent in one `input keyevent` call cost barely more than one;
+# the app may skip ahead under rapid input, so batches are verified afterwards.
+NAV_BATCH = 15
+
 # Key codes sent by the original remote ("Klydoremote"), captured from the clock.
 KEY_SLEEP = 42
 KEY_INFO = 19

@@ -65,7 +65,10 @@ SENSORS: tuple[KlydoSensorDescription, ...] = (
     KlydoSensorDescription(
         key="favorites",
         value_fn=lambda s: len(s.favorites),
-        attributes_fn=lambda s: {"klydo_ids": s.favorites},
+        attributes_fn=lambda s: {
+            "klydo_ids": s.favorites,
+            "klydo_names": s.favorite_names,
+        },
     ),
     KlydoSensorDescription(
         key="screen_state",

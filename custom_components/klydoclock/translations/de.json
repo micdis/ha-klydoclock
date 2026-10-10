@@ -8,6 +8,14 @@
           "host": "IP-Adresse",
           "port": "ADB-Port"
         }
+      },
+      "reconfigure": {
+        "title": "Klydoclock neu konfigurieren",
+        "description": "Ändere die Adresse, unter der die Uhr erreichbar ist.",
+        "data": {
+          "host": "IP-Adresse",
+          "port": "ADB-Port"
+        }
       }
     },
     "error": {
@@ -16,7 +24,9 @@
       "no_root": "Die Uhr verweigert Root-Zugriff, die Einstellungen sind nicht lesbar."
     },
     "abort": {
-      "already_configured": "Diese Uhr ist bereits eingerichtet."
+      "already_configured": "Diese Uhr ist bereits eingerichtet.",
+      "reconfigure_successful": "Die neue Adresse wurde gespeichert.",
+      "unique_id_mismatch": "Unter dieser Adresse meldet sich eine andere Uhr."
     }
   },
   "entity": {
@@ -78,11 +88,30 @@
           "night": "Nacht (rot)",
           "off": "Aus"
         }
+      },
+      "favorite_klydo": {
+        "name": "Favoriten-Klydo"
       }
     },
     "switch": {
       "display": {
         "name": "Display"
+      }
+    }
+  },
+  "services": {
+    "show_klydo": {
+      "name": "Klydo anzeigen",
+      "description": "Navigiert mit Weiter/Zurück durch den Feed der Uhr, bis der angegebene Klydo angezeigt wird. Dauert ein paar Sekunden pro Schritt; die Uhr muss im FEED-Modus sein.",
+      "fields": {
+        "klydo": {
+          "name": "Klydo",
+          "description": "Name oder ID des Klydos, wie die Uhr ihn kennt."
+        },
+        "device_id": {
+          "name": "Gerät",
+          "description": "Die zu steuernde Uhr. Nur nötig, wenn mehrere eingerichtet sind."
+        }
       }
     }
   }
