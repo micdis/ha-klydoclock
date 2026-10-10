@@ -44,6 +44,7 @@ class KlydoAdb:
         self._signer = signer
         self._device: AdbDeviceTcpAsync | None = None
         self._lock = asyncio.Lock()
+        self._closed = False
 
     async def _open(self) -> AdbDeviceTcpAsync:
         device = AdbDeviceTcpAsync(self.host, self.port, default_transport_timeout_s=9.0)
@@ -94,6 +95,8 @@ class KlydoAdb:
 
     async def _call(self, method: str, command: str, decode: bool):
         async with self._lock:
+            if self._closed:
+                raise KlydoConnectionError(f"{self.host}:{self.port}: connection closed")
             try:
                 async with asyncio.timeout(TIMEOUT + 12):
                     device = await self._ensure_connected()
@@ -122,6 +125,7 @@ class KlydoAdb:
         await self.shell(f"input keyevent {int(keycode)}")
 
     async def close(self) -> None:
-        """Close the connection."""
+        """Close the connection for good; later calls fail instead of reconnecting."""
         async with self._lock:
+            self._closed = True
             await self._drop()

@@ -101,6 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: KlydoConfigEntry) -> boo
 
 async def async_unload_entry(hass: HomeAssistant, entry: KlydoConfigEntry) -> bool:
     """Unload a config entry."""
+    entry.runtime_data.cancel_navigation()
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         await entry.runtime_data.adb.close()

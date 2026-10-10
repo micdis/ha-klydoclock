@@ -120,6 +120,7 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
         self._display_lock = asyncio.Lock()
         self.app_version: str | None = None
         self._catalog_loaded: datetime | None = None
+        self._nav_task: asyncio.Task | None = None
 
     async def _load_catalog(self) -> None:
         database = await self.adb.read_file(DATABASE_PATH)
@@ -217,61 +218,113 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
             f"{len(matches)} klydos are named '{value}'; use the klydo id instead"
         )
 
+    def cancel_navigation(self) -> None:
+        """Abort a running feed navigation (newer selection, or unload)."""
+        task, self._nav_task = self._nav_task, None
+        if task is not None and not task.done():
+            task.cancel()
+
+    async def _read_settled_state(self) -> KlydoState:
+        """Read the state once the klydo on display has stopped changing.
+
+        Injected key events drain through the app's animation queue for a
+        while after `input` returns; navigating against a still-moving
+        position leads to endless corrections.
+        """
+        await asyncio.sleep(1.0)
+        state = await self._async_update_data()
+        marker = (state.klydo_id, state.settings.get("klydo_time"))
+        for _ in range(12):
+            await asyncio.sleep(1.2)
+            state = await self._async_update_data()
+            current = (state.klydo_id, state.settings.get("klydo_time"))
+            if current == marker:
+                return state
+            marker = current
+        return state
+
     async def async_show_klydo(self, klydo_id: str) -> None:
         """Walk the feed with next/previous keys until klydo_id is on display."""
-        async with self._display_lock:
-            try:
-                state = await self._async_update_data()
-                if (mode := state.setting("mode")) != "FEED":
+        self.cancel_navigation()  # a newer selection replaces a running one
+        self._nav_task = asyncio.current_task()
+        try:
+            async with self._display_lock:
+                try:
+                    await self._navigate_to(klydo_id)
+                except UpdateFailed as err:
+                    raise HomeAssistantError(f"Klydoclock: {err}") from err
+                finally:
+                    # Keep the entities current. Skipped when cancelled:
+                    # awaiting inside a cancelled task is unsafe.
+                    task = asyncio.current_task()
+                    if task is None or not task.cancelling():
+                        await self.async_refresh()
+        except asyncio.CancelledError:
+            if self._nav_task is not asyncio.current_task():
+                raise HomeAssistantError(
+                    "Klydo navigation was replaced by a newer selection or stopped"
+                ) from None
+            raise
+        finally:
+            if self._nav_task is asyncio.current_task():
+                self._nav_task = None
+
+    async def _navigate_to(self, klydo_id: str) -> None:
+        """The navigation loop; runs with the display lock held."""
+        state = await self._read_settled_state()
+        if (mode := state.setting("mode")) != "FEED":
+            raise HomeAssistantError(
+                f"Selecting a klydo needs the clock in FEED mode, not {mode}"
+            )
+        presses = 0
+        budget = len(state.feed) + 30
+        wrap = True  # assume next wraps from the last feed entry to the first
+        last_key: int | None = None
+        flips = 0
+        while state.klydo_id != klydo_id:
+            feed = state.feed
+            if klydo_id not in feed:
+                raise HomeAssistantError("This klydo is not in the clock's feed")
+            if state.klydo_id not in feed:
+                raise HomeAssistantError(
+                    "The klydo on display is not part of the feed"
+                )
+            cur, tgt = feed.index(state.klydo_id), feed.index(klydo_id)
+            forward = (tgt - cur) % len(feed)
+            backward = (cur - tgt) % len(feed)
+            if wrap:
+                steps, key = (
+                    (forward, KEY_NEXT)
+                    if forward <= backward
+                    else (backward, KEY_PREVIOUS)
+                )
+            elif tgt > cur:
+                steps, key = tgt - cur, KEY_NEXT
+            else:
+                steps, key = cur - tgt, KEY_PREVIOUS
+            if last_key is not None and key != last_key:
+                flips += 1
+                if flips >= 4:
                     raise HomeAssistantError(
-                        f"Selecting a klydo needs the clock in FEED mode, not {mode}"
+                        "The clock keeps skipping past this klydo; giving up"
                     )
-                presses = 0
-                budget = int(len(state.feed) * 1.5) + 10
-                wrap = True  # assume next wraps from the last feed entry to the first
-                while state.klydo_id != klydo_id:
-                    feed = state.feed
-                    if klydo_id not in feed:
-                        raise HomeAssistantError("This klydo is not in the clock's feed")
-                    if state.klydo_id not in feed:
-                        raise HomeAssistantError(
-                            "The klydo on display is not part of the feed"
-                        )
-                    cur, tgt = feed.index(state.klydo_id), feed.index(klydo_id)
-                    forward = (tgt - cur) % len(feed)
-                    backward = (cur - tgt) % len(feed)
-                    if wrap:
-                        steps, key = (
-                            (forward, KEY_NEXT)
-                            if forward <= backward
-                            else (backward, KEY_PREVIOUS)
-                        )
-                    elif tgt > cur:
-                        steps, key = tgt - cur, KEY_NEXT
-                    else:
-                        steps, key = cur - tgt, KEY_PREVIOUS
-                    batch = min(steps, NAV_BATCH)
-                    presses += batch
-                    if presses > budget:
-                        raise HomeAssistantError(
-                            f"Klydo not reached after {presses} key presses"
-                        )
-                    await self.adb.shell(
-                        "input keyevent " + " ".join([str(key)] * batch)
+            last_key = key
+            # After overshooting once, approach in single, settled steps.
+            batch = 1 if flips else min(steps, NAV_BATCH)
+            presses += batch
+            if presses > budget:
+                raise HomeAssistantError(
+                    f"Klydo not reached after {presses} key presses"
+                )
+            await self.adb.shell("input keyevent " + " ".join([str(key)] * batch))
+            before = state.klydo_id
+            state = await self._read_settled_state()
+            if state.klydo_id == before:
+                if not wrap:
+                    raise HomeAssistantError(
+                        "Klydoclock did not react to the navigation keys"
                     )
-                    await asyncio.sleep(1.0)  # the app persists a change within ~0.3 s
-                    before = state.klydo_id
-                    state = await self._async_update_data()
-                    if state.klydo_id == before:
-                        if not wrap:
-                            raise HomeAssistantError(
-                                "Klydoclock did not react to the navigation keys"
-                            )
-                        wrap = False  # maybe the feed does not wrap; go the direct way
-            except UpdateFailed as err:
-                raise HomeAssistantError(f"Klydoclock: {err}") from err
-            finally:
-                await self.async_refresh()
+                wrap = False  # maybe the feed does not wrap; go the direct way
 
     async def async_set_display_mode(self, target: str) -> None:
         """Press the sleep key until the display is in the wanted mode."""
