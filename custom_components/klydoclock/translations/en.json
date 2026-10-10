@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Klydoclock",
+        "description": "The clock is reached over ADB on your local network. Give it a fixed IP address in your router.",
+        "data": {
+          "host": "IP address",
+          "port": "ADB port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No ADB connection to this address.",
+      "not_klydoclock": "This device does not run the Klydoclock app.",
+      "no_root": "The clock refused root access, so its settings cannot be read."
+    },
+    "abort": {
+      "already_configured": "This clock is already set up."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "klydo": {
+        "name": "Klydo"
+      },
+      "brightness_level": {
+        "name": "Brightness level"
+      },
+      "favorites": {
+        "name": "Favorites"
+      },
+      "screen_state": {
+        "name": "Screen state"
+      },
+      "night_mode": {
+        "name": "Night mode"
+      },
+      "mode": {
+        "name": "Mode"
+      },
+      "artist": {
+        "name": "Artist"
+      }
+    },
+    "binary_sensor": {
+      "favorite": {
+        "name": "Favorite"
+      }
+    },
+    "button": {
+      "next": {
+        "name": "Next klydo"
+      },
+      "previous": {
+        "name": "Previous klydo"
+      },
+      "toggle_favorite": {
+        "name": "Toggle favorite"
+      },
+      "info": {
+        "name": "Info"
+      },
+      "settings": {
+        "name": "Settings"
+      },
+      "sleep": {
+        "name": "Sleep key"
+      }
+    },
+    "select": {
+      "display_mode": {
+        "name": "Display mode",
+        "state": {
+          "bright": "Bright",
+          "medium": "Medium",
+          "dim": "Dim",
+          "night": "Night (red)",
+          "off": "Off"
+        }
+      }
+    },
+    "switch": {
+      "display": {
+        "name": "Display"
+      }
+    }
+  }
+}

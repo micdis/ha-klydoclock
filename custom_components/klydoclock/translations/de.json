@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Klydoclock verbinden",
+        "description": "Die Uhr wird im lokalen Netz über ADB angesprochen. Gib ihr im Router eine feste IP-Adresse.",
+        "data": {
+          "host": "IP-Adresse",
+          "port": "ADB-Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Keine ADB-Verbindung zu dieser Adresse.",
+      "not_klydoclock": "Auf diesem Gerät läuft die Klydoclock-App nicht.",
+      "no_root": "Die Uhr verweigert Root-Zugriff, die Einstellungen sind nicht lesbar."
+    },
+    "abort": {
+      "already_configured": "Diese Uhr ist bereits eingerichtet."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "klydo": {
+        "name": "Klydo"
+      },
+      "brightness_level": {
+        "name": "Helligkeitsstufe"
+      },
+      "favorites": {
+        "name": "Favoriten"
+      },
+      "screen_state": {
+        "name": "Displaystatus"
+      },
+      "night_mode": {
+        "name": "Nachtmodus"
+      },
+      "mode": {
+        "name": "Modus"
+      },
+      "artist": {
+        "name": "Künstler"
+      }
+    },
+    "binary_sensor": {
+      "favorite": {
+        "name": "Favorit"
+      }
+    },
+    "button": {
+      "next": {
+        "name": "Nächster Klydo"
+      },
+      "previous": {
+        "name": "Vorheriger Klydo"
+      },
+      "toggle_favorite": {
+        "name": "Favorit umschalten"
+      },
+      "info": {
+        "name": "Info"
+      },
+      "settings": {
+        "name": "Einstellungen"
+      },
+      "sleep": {
+        "name": "Sleep-Taste"
+      }
+    },
+    "select": {
+      "display_mode": {
+        "name": "Display-Modus",
+        "state": {
+          "bright": "Hell",
+          "medium": "Mittel",
+          "dim": "Gedimmt",
+          "night": "Nacht (rot)",
+          "off": "Aus"
+        }
+      }
+    },
+    "switch": {
+      "display": {
+        "name": "Display"
+      }
+    }
+  }
+}

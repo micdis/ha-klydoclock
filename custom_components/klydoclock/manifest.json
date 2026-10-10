@@ -1,0 +1,19 @@
+{
+  "domain": "klydoclock",
+  "name": "Klydoclock",
+  "codeowners": [
+    "@micdis"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/micdis/ha-klydoclock",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/micdis/ha-klydoclock/issues",
+  "loggers": [
+    "adb_shell"
+  ],
+  "requirements": [
+    "adb-shell[async]>=0.4.4"
+  ],
+  "version": "0.2.0"
+}
