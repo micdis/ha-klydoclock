@@ -55,6 +55,8 @@ Worth knowing:
 - The clock must be in **FEED mode** (its normal state), and the klydo must be
   in the feed. In the firmware this was developed against, the feed contains
   every klydo on the clock.
+- Selecting another klydo while a navigation is still running cancels the
+  running one; the newest selection wins.
 - Each step takes a moment; a jump across the feed can take up to half a
   minute. Nearby klydos arrive in a few seconds.
 - Every klydo passed on the way counts as briefly viewed in the app's
