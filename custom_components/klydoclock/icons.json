@@ -1,0 +1,73 @@
+{
+  "entity": {
+    "sensor": {
+      "klydo": {
+        "default": "mdi:motion-play-outline"
+      },
+      "artist": {
+        "default": "mdi:palette"
+      },
+      "brightness_level": {
+        "default": "mdi:brightness-6"
+      },
+      "favorites": {
+        "default": "mdi:heart-multiple"
+      },
+      "screen_state": {
+        "default": "mdi:television-ambient-light"
+      },
+      "night_mode": {
+        "default": "mdi:weather-night"
+      },
+      "mode": {
+        "default": "mdi:playlist-play"
+      }
+    },
+    "binary_sensor": {
+      "favorite": {
+        "default": "mdi:heart",
+        "state": {
+          "off": "mdi:heart-outline"
+        }
+      }
+    },
+    "button": {
+      "next": {
+        "default": "mdi:skip-next"
+      },
+      "previous": {
+        "default": "mdi:skip-previous"
+      },
+      "toggle_favorite": {
+        "default": "mdi:heart-plus"
+      },
+      "info": {
+        "default": "mdi:information-outline"
+      },
+      "settings": {
+        "default": "mdi:cog"
+      },
+      "sleep": {
+        "default": "mdi:power-sleep"
+      }
+    },
+    "select": {
+      "display_mode": {
+        "default": "mdi:brightness-6"
+      },
+      "favorite_klydo": {
+        "default": "mdi:heart-search"
+      }
+    },
+    "switch": {
+      "display": {
+        "default": "mdi:television"
+      }
+    }
+  },
+  "services": {
+    "show_klydo": {
+      "service": "mdi:motion-play"
+    }
+  }
+}

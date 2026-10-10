@@ -1,0 +1,12 @@
+show_klydo:
+  fields:
+    klydo:
+      required: true
+      example: "Steamboat Willie"
+      selector:
+        text:
+    device_id:
+      required: false
+      selector:
+        device:
+          integration: klydoclock

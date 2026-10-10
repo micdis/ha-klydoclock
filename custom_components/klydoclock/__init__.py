@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import re
 
-from homeassistant.const import CONF_HOST, CONF_PORT, Platform
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+import voluptuous as vol
+
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import ATTR_DEVICE_ID, CONF_HOST, CONF_PORT, Platform
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.storage import STORAGE_DIR
+from homeassistant.helpers.typing import ConfigType
 
 from .adb import KlydoAdb, KlydoConnectionError, KlydoRootError, load_signer
-from .const import ADB_KEY_FILE, DEFAULT_PORT, PACKAGE
+from .const import ADB_KEY_FILE, ATTR_KLYDO, DEFAULT_PORT, DOMAIN, PACKAGE, SERVICE_SHOW_KLYDO
 from .coordinator import KlydoConfigEntry, KlydoCoordinator
 
 PLATFORMS = [
@@ -20,6 +25,45 @@ PLATFORMS = [
     Platform.SENSOR,
     Platform.SWITCH,
 ]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+SHOW_KLYDO_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_KLYDO): cv.string,
+        vol.Optional(ATTR_DEVICE_ID): cv.string,
+    }
+)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the integration's actions."""
+
+    async def show_klydo(call: ServiceCall) -> None:
+        entries = [
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if device_id := call.data.get(ATTR_DEVICE_ID):
+            device = dr.async_get(hass).async_get(device_id)
+            if device is None:
+                raise ServiceValidationError(f"Unknown device: {device_id}")
+            entries = [e for e in entries if e.entry_id in device.config_entries]
+        if not entries:
+            raise ServiceValidationError("No Klydoclock is set up and loaded")
+        if len(entries) > 1:
+            raise ServiceValidationError(
+                "More than one Klydoclock is set up; pass device_id"
+            )
+        coordinator: KlydoCoordinator = entries[0].runtime_data
+        klydo_id = coordinator.resolve_klydo_id(call.data[ATTR_KLYDO])
+        await coordinator.async_show_klydo(klydo_id)
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_SHOW_KLYDO, show_klydo, schema=SHOW_KLYDO_SCHEMA
+    )
+    return True
 
 
 async def async_get_adb(hass: HomeAssistant, host: str, port: int) -> KlydoAdb:
