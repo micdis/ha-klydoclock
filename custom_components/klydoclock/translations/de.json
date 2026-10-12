@@ -102,16 +102,42 @@
   "services": {
     "show_klydo": {
       "name": "Klydo anzeigen",
-      "description": "Navigiert mit Weiter/Zurück durch den Feed der Uhr, bis der angegebene Klydo angezeigt wird. Dauert ein paar Sekunden pro Schritt; die Uhr muss im FEED-Modus sein.",
+      "description": "Bringt einen Klydo auf die Uhr, indem sie mit Weiter/Zurück durch den Feed oder die Favoriten schaltet. Wechselt dafür bei Bedarf über das Home-Menü in den Modus FEED oder FAVORITE. Dauert ein paar Sekunden pro Schritt.",
       "fields": {
         "klydo": {
           "name": "Klydo",
           "description": "Name oder ID des Klydos, wie die Uhr ihn kennt."
         },
+        "mode": {
+          "name": "Modus",
+          "description": "Liste, in der navigiert wird. Ohne Angabe die aktuelle, falls sie den Klydo enthält, sonst der Feed, sonst die Favoriten."
+        },
         "device_id": {
           "name": "Gerät",
           "description": "Die zu steuernde Uhr. Nur nötig, wenn mehrere eingerichtet sind."
         }
+      }
+    },
+    "set_mode": {
+      "name": "Modus setzen",
+      "description": "Schaltet die Uhr über ihr Home-Menü in den Modus FEED oder FAVORITE.",
+      "fields": {
+        "mode": {
+          "name": "Modus",
+          "description": "Wiedergabemodus, in den gewechselt wird."
+        },
+        "device_id": {
+          "name": "Gerät",
+          "description": "Die zu steuernde Uhr. Nur nötig, wenn mehrere eingerichtet sind."
+        }
+      }
+    }
+  },
+  "selector": {
+    "playback_mode": {
+      "options": {
+        "feed": "Feed",
+        "favorite": "Favoriten"
       }
     }
   }

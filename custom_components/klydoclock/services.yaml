@@ -5,6 +5,30 @@ show_klydo:
       example: "Steamboat Willie"
       selector:
         text:
+    mode:
+      required: false
+      selector:
+        select:
+          translation_key: playback_mode
+          options:
+            - feed
+            - favorite
+    device_id:
+      required: false
+      selector:
+        device:
+          integration: klydoclock
+
+set_mode:
+  fields:
+    mode:
+      required: true
+      selector:
+        select:
+          translation_key: playback_mode
+          options:
+            - feed
+            - favorite
     device_id:
       required: false
       selector:

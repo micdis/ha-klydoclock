@@ -120,6 +120,10 @@ class KlydoAdb:
         """Return the raw content of a file on the clock (empty if missing)."""
         return await self._call("exec_out", f"cat '{path}' 2>/dev/null", False) or b""
 
+    async def screencap(self) -> bytes:
+        """Return a PNG screenshot of the clock."""
+        return await self._call("exec_out", "screencap -p", False) or b""
+
     async def keyevent(self, keycode: int) -> None:
         """Simulate a remote control key press."""
         await self.shell(f"input keyevent {int(keycode)}")

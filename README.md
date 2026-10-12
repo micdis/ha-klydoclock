@@ -21,8 +21,9 @@ by Klydo.
 | Sensors **Brightness level**, **Favorites** | App brightness level, number of favorites; the favorites' ids and names as attributes |
 | Diagnostic sensors | Screen state, night mode, mode |
 
-There is also an action **klydoclock.show_klydo** that walks the clock to any
-klydo it knows, by name or id.
+There are also two actions: **klydoclock.show_klydo** walks the clock to any
+klydo in its feed or favorites, by name or id, and **klydoclock.set_mode**
+switches between FEED and FAVORITE mode.
 
 ## How it works
 
@@ -40,21 +41,45 @@ is open on the local network and allows root.
 
 The app has no interface to jump straight to a specific klydo; it only offers
 next and previous. **Favorite klydo** and `klydoclock.show_klydo` therefore
-walk through the feed with next/previous keys (batched, verified after every
-batch) until the wanted klydo is on display:
+step through a list with next/previous keys (batched, verified after every
+batch) until the wanted klydo is on display. In FEED mode the keys walk the
+feed, in FAVORITE mode the favorites.
 
 ```yaml
 actions:
   - action: klydoclock.show_klydo
     data:
       klydo: "Steamboat Willie"   # or a klydo id
+      mode: favorite              # optional: feed or favorite
 ```
+
+Without `mode`, the current list is used if it holds the klydo, otherwise the
+feed, otherwise the favorites. If the clock is in another mode (for example
+EXPLORE), it is switched first.
+
+### Switching the mode
+
+`klydoclock.set_mode` (and `show_klydo` when it needs to) opens the home menu
+with the settings key, turns the selection to FEED or FAVORITES with
+left/right and confirms with Enter. The menu has no accessibility text, so the
+integration takes a screenshot after every step and reads which entry is
+selected from the bright arc on the rim; a screenshot only counts as the menu
+if it also shows the menu's black centre and plain grey ring. FEED is the
+entry at 12 o'clock, FAVORITES the next one clockwise. If the menu does not
+look as expected, the integration turns back to the entry it opened on and
+confirms that, because a menu left alone for about a minute falls back to FEED.
+
+EXPLORE cannot be selected this way: entering it asks for a category.
+
+In night mode the first key press only wakes the display. Navigation and mode
+changes therefore leave night mode first and return to it when they are done.
+With the display off they refuse to run.
 
 Worth knowing:
 
-- The clock must be in **FEED mode** (its normal state), and the klydo must be
-  in the feed. In the firmware this was developed against, the feed contains
-  every klydo on the clock.
+- In the firmware this was developed against, the feed contains every klydo
+  on the clock.
+- Switching into FAVORITE mode starts at the last favorite.
 - Selecting another klydo while a navigation is still running cancels the
   running one; the newest selection wins.
 - Each step takes a moment; a jump across the feed can take up to half a
