@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -26,14 +28,22 @@ from .const import (
     DISPLAY_NIGHT,
     DISPLAY_OFF,
     DOMAIN,
+    KEY_ENTER,
+    KEY_MENU,
     KEY_NEXT,
     KEY_PREVIOUS,
     KEY_SLEEP,
+    MENU_FEED_ANGLE,
+    MENU_MAX_STEPS,
+    MENU_TOLERANCE,
+    MODE_FAVORITE,
+    MODE_FEED,
     NAV_BATCH,
     SCAN_INTERVAL,
     SETTINGS_PATH,
 )
 from .datastore import parse_preferences
+from .menu import angle_distance, selection_angle
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -121,6 +131,7 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
         self.app_version: str | None = None
         self._catalog_loaded: datetime | None = None
         self._nav_task: asyncio.Task | None = None
+        self._night_pending = False
 
     async def _load_catalog(self) -> None:
         database = await self.adb.read_file(DATABASE_PATH)
@@ -243,14 +254,32 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
             marker = current
         return state
 
-    async def async_show_klydo(self, klydo_id: str) -> None:
-        """Walk the feed with next/previous keys until klydo_id is on display."""
-        self.cancel_navigation()  # a newer selection replaces a running one
+    async def async_show_klydo(self, klydo_id: str, mode: str | None = None) -> None:
+        """Bring klydo_id on display, switching to FEED or FAVORITE mode if needed.
+
+        Without a mode, the current list is used when it holds the klydo,
+        otherwise the feed, otherwise the favorites.
+        """
+        await self._run_exclusive(lambda: self._navigate_to(klydo_id, mode))
+
+    async def async_set_mode(self, mode: str) -> None:
+        """Switch the clock to FEED or FAVORITE mode through the home menu."""
+
+        async def _set() -> None:
+            state = await self._read_settled_state()
+            await self._switch_mode(state, mode)
+
+        await self._run_exclusive(_set)
+
+    async def _run_exclusive(self, job: Callable[[], Awaitable[None]]) -> None:
+        """Run one navigation job; a newer one cancels it."""
+        self.cancel_navigation()
         self._nav_task = asyncio.current_task()
         try:
             async with self._display_lock:
                 try:
-                    await self._navigate_to(klydo_id)
+                    async with self._awake():
+                        await job()
                 except UpdateFailed as err:
                     raise HomeAssistantError(f"Klydoclock: {err}") from err
                 finally:
@@ -269,29 +298,116 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
             if self._nav_task is asyncio.current_task():
                 self._nav_task = None
 
-    async def _navigate_to(self, klydo_id: str) -> None:
-        """The navigation loop; runs with the display lock held."""
+    async def _menu_angle(self) -> float | None:
+        png = await self.adb.screencap()
+        if not png:
+            return None
+        return await self.hass.async_add_executor_job(selection_angle, png)
+
+    async def _turn_menu_to(self, angle: float | None, target: float) -> float:
+        """Turn the open menu until the selection arc sits at the target angle."""
+        for _ in range(MENU_MAX_STEPS):
+            if angle is None:
+                raise HomeAssistantError("Klydoclock: home menu not recognised")
+            if angle_distance(angle, target) <= MENU_TOLERANCE:
+                return angle
+            clockwise = (target - angle) % 360 <= 180
+            await self.adb.keyevent(KEY_NEXT if clockwise else KEY_PREVIOUS)
+            angle = await self._menu_angle()
+        raise HomeAssistantError("Klydoclock: menu entry not reached")
+
+    async def _switch_mode(self, state: KlydoState, mode: str) -> KlydoState:
+        """Switch to FEED or FAVORITE through the home menu; runs under the lock."""
+        if state.setting("mode") == mode:
+            return state
+        await self.adb.keyevent(KEY_MENU)
+        await asyncio.sleep(1.0)
+        start = await self._menu_angle()
+        if start is None:
+            # Nothing to confirm: either the menu did not open, or it looks
+            # different from what this integration knows.
+            raise HomeAssistantError("Klydoclock: home menu did not open")
+        committed = False
+        try:
+            angle = await self._turn_menu_to(start, MENU_FEED_ANGLE)
+            if mode == MODE_FAVORITE:
+                await self.adb.keyevent(KEY_NEXT)
+                angle = await self._menu_angle()
+                if angle is None or not (
+                    MENU_TOLERANCE < (angle - MENU_FEED_ANGLE) % 360 <= 120
+                ):
+                    raise HomeAssistantError(
+                        "Klydoclock: favorites entry not found in the home menu"
+                    )
+            await self.adb.keyevent(KEY_ENTER)
+            committed = True
+        finally:
+            if not committed:
+                await self._abort_menu(start)
         state = await self._read_settled_state()
-        if (mode := state.setting("mode")) != "FEED":
-            raise HomeAssistantError(
-                f"Selecting a klydo needs the clock in FEED mode, not {mode}"
-            )
+        if (now := state.setting("mode")) != mode:
+            raise HomeAssistantError(f"Klydoclock switched to {now} instead of {mode}")
+        return state
+
+    async def _abort_menu(self, start: float) -> None:
+        """Best effort: turn back to the entry the menu opened on and confirm it.
+
+        Left open, the menu would fall back to FEED after about a minute.
+        """
+        try:
+            await self._turn_menu_to(await self._menu_angle(), start)
+            await self.adb.keyevent(KEY_ENTER)
+        except (HomeAssistantError, KlydoConnectionError, KlydoRootError) as err:
+            _LOGGER.warning("Could not close the Klydoclock home menu: %s", err)
+
+    async def _navigate_to(self, klydo_id: str, mode: str | None) -> None:
+        """Choose the list to walk, switch mode if needed, then walk it."""
+        state = await self._read_settled_state()
+        in_feed = klydo_id in state.feed
+        in_favorites = klydo_id in state.favorites
+        current = state.setting("mode")
+        if mode == MODE_FEED and not in_feed:
+            raise ServiceValidationError("This klydo is not in the clock's feed")
+        if mode == MODE_FAVORITE and not in_favorites:
+            raise ServiceValidationError("This klydo is not a favorite")
+        if mode is None:
+            if current == MODE_FAVORITE and in_favorites:
+                mode = MODE_FAVORITE
+            elif in_feed:
+                mode = MODE_FEED
+            elif in_favorites:
+                mode = MODE_FAVORITE
+            else:
+                raise HomeAssistantError(
+                    "This klydo is neither in the feed nor a favorite"
+                )
+        state = await self._switch_mode(state, mode)
+        await self._walk_list(state, klydo_id, mode)
+
+    async def _walk_list(self, state: KlydoState, klydo_id: str, mode: str) -> None:
+        """Press next/previous until klydo_id is on display.
+
+        In FEED mode the keys step through the feed, in FAVORITE mode through
+        the favorites, both in list order.
+        """
         presses = 0
         budget = len(state.feed) + 30
-        wrap = True  # assume next wraps from the last feed entry to the first
+        wrap = True  # assume next wraps from the last entry to the first
         last_key: int | None = None
         flips = 0
         while state.klydo_id != klydo_id:
-            feed = state.feed
-            if klydo_id not in feed:
-                raise HomeAssistantError("This klydo is not in the clock's feed")
-            if state.klydo_id not in feed:
+            if state.setting("mode") != mode:
+                raise HomeAssistantError("The clock left the mode while navigating")
+            items = state.feed if mode == MODE_FEED else state.favorites
+            if klydo_id not in items:
+                raise HomeAssistantError("The klydo is no longer in the list")
+            if state.klydo_id not in items:
                 raise HomeAssistantError(
-                    "The klydo on display is not part of the feed"
+                    "The klydo on display is not part of the list"
                 )
-            cur, tgt = feed.index(state.klydo_id), feed.index(klydo_id)
-            forward = (tgt - cur) % len(feed)
-            backward = (cur - tgt) % len(feed)
+            cur, tgt = items.index(state.klydo_id), items.index(klydo_id)
+            forward = (tgt - cur) % len(items)
+            backward = (cur - tgt) % len(items)
             if wrap:
                 steps, key = (
                     (forward, KEY_NEXT)
@@ -332,27 +448,61 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
             raise HomeAssistantError(f"Unknown display mode: {target}")
         async with self._display_lock:
             try:
-                state = await self._async_update_data()
-                # One full cycle is five presses; allow one spare.
-                for _ in range(len(DISPLAY_MODES) + 1):
-                    if state.display_mode == target:
-                        break
-                    stamp = state.display_stamp
-                    await self.adb.keyevent(KEY_SLEEP)
-                    for _ in range(12):  # the app persists a change within ~0.3 s
-                        await asyncio.sleep(0.35)
-                        state = await self._async_update_data()
-                        if state.display_stamp != stamp:
-                            break
-                    else:
-                        raise HomeAssistantError(
-                            "Klydoclock did not react to the sleep key"
-                        )
-                else:
-                    raise HomeAssistantError(
-                        f"Klydoclock did not reach display mode {target}"
-                    )
+                await self._step_display_to(target)
             except UpdateFailed as err:
                 raise HomeAssistantError(f"Klydoclock: {err}") from err
             finally:
                 await self.async_refresh()
+
+    async def _step_display_to(self, target: str) -> None:
+        """Sleep-key stepping; the caller holds the display lock."""
+        state = await self._async_update_data()
+        # One full cycle is five presses; allow one spare.
+        for _ in range(len(DISPLAY_MODES) + 1):
+            if state.display_mode == target:
+                return
+            stamp = state.display_stamp
+            await self.adb.keyevent(KEY_SLEEP)
+            for _ in range(12):  # the app persists a change within ~0.3 s
+                await asyncio.sleep(0.35)
+                state = await self._async_update_data()
+                if state.display_stamp != stamp:
+                    break
+            else:
+                raise HomeAssistantError("Klydoclock did not react to the sleep key")
+        raise HomeAssistantError(f"Klydoclock did not reach display mode {target}")
+
+    @asynccontextmanager
+    async def _awake(self) -> AsyncIterator[None]:
+        """Leave night mode for key navigation and return to it afterwards.
+
+        In night mode the first key press only wakes the display and is
+        otherwise swallowed. A cancelled job leaves the return to night mode
+        to the job that replaced it.
+        """
+        state = await self._async_update_data()
+        if state.display_mode == DISPLAY_OFF:
+            raise HomeAssistantError("Klydoclock: the display is off")
+        restore = True
+        try:
+            if state.display_mode == DISPLAY_NIGHT:
+                self._night_pending = True
+                await self.adb.keyevent(KEY_MENU)
+                for _ in range(12):
+                    await asyncio.sleep(0.5)
+                    state = await self._async_update_data()
+                    if state.display_mode != DISPLAY_NIGHT:
+                        break
+                else:
+                    raise HomeAssistantError("Klydoclock did not leave night mode")
+            yield
+        except asyncio.CancelledError:
+            restore = False
+            raise
+        finally:
+            if restore and self._night_pending:
+                try:
+                    await self._step_display_to(DISPLAY_NIGHT)
+                    self._night_pending = False
+                except (HomeAssistantError, UpdateFailed) as err:
+                    _LOGGER.warning("Klydoclock: could not return to night mode: %s", err)

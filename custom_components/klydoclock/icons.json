@@ -68,6 +68,9 @@
   "services": {
     "show_klydo": {
       "service": "mdi:motion-play"
+    },
+    "set_mode": {
+      "service": "mdi:playlist-music"
     }
   }
 }

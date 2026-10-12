@@ -102,16 +102,42 @@
   "services": {
     "show_klydo": {
       "name": "Show klydo",
-      "description": "Walks the clock's feed with next/previous until the given klydo is on display. Takes a few seconds per step; the clock must be in FEED mode.",
+      "description": "Brings a klydo on display by stepping through the feed or the favorites with next/previous. Switches the clock to FEED or FAVORITE mode through its home menu when needed. Takes a few seconds per step.",
       "fields": {
         "klydo": {
           "name": "Klydo",
           "description": "Name or id of the klydo, as known to the clock."
         },
+        "mode": {
+          "name": "Mode",
+          "description": "List to navigate in. Without it, the current list is used if it holds the klydo, otherwise the feed, otherwise the favorites."
+        },
         "device_id": {
           "name": "Device",
           "description": "The clock to control. Only needed when more than one is set up."
         }
+      }
+    },
+    "set_mode": {
+      "name": "Set mode",
+      "description": "Switches the clock to FEED or FAVORITE mode through its home menu.",
+      "fields": {
+        "mode": {
+          "name": "Mode",
+          "description": "Playback mode to switch to."
+        },
+        "device_id": {
+          "name": "Device",
+          "description": "The clock to control. Only needed when more than one is set up."
+        }
+      }
+    }
+  },
+  "selector": {
+    "playback_mode": {
+      "options": {
+        "feed": "Feed",
+        "favorite": "Favorites"
       }
     }
   }
