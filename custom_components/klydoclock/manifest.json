@@ -13,8 +13,7 @@
     "adb_shell"
   ],
   "requirements": [
-    "adb-shell[async]>=0.4.4",
-    "pillow>=10.0.0"
+    "adb-shell[async]>=0.4.4"
   ],
   "version": "0.4.0"
 }
