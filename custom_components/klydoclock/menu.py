@@ -14,6 +14,7 @@ from PIL import Image
 
 CENTER = (540, 540)
 RIM_RADII = (505, 512, 519)
+ICON_RADIUS = 445
 
 # Brightness depends on the display mode (dimmed, red night mode), so the arc
 # is found relative to the rest of the rim: in the menu it is about 2.4 times
@@ -52,7 +53,28 @@ def is_menu(image: Image.Image) -> bool:
     )
     floor, median = band[0], band[len(band) // 2]
     # The ring is one grey (45 bright, 32 dimmed); icons only add brighter spots.
-    return 15 <= floor and median <= floor * 1.15 + 3
+    if not (15 <= floor and median <= floor * 1.15 + 3):
+        return False
+    # The info key opens a ring menu of the same look with four entries
+    # (one of them delete at 6 o'clock). The home menu has five, 72 degrees
+    # apart: icons at 144 and 216 degrees, plain ring at 180.
+    return (
+        _icon_at(image, 144, floor)
+        and _icon_at(image, 216, floor)
+        and not _icon_at(image, 180, floor)
+    )
+
+
+def _icon_at(image: Image.Image, degrees: float, floor: int) -> bool:
+    """Whether a menu icon sits on the icon circle at the given angle."""
+    centre_x = CENTER[0] + ICON_RADIUS * math.sin(math.radians(degrees))
+    centre_y = CENTER[1] - ICON_RADIUS * math.cos(math.radians(degrees))
+    bright = 0
+    for dx in range(-30, 31, 5):
+        for dy in range(-30, 31, 5):
+            if max(image.getpixel((int(centre_x + dx), int(centre_y + dy)))) > 2 * floor:
+                bright += 1
+    return bright >= 8
 
 
 def selection_angle(png: bytes) -> float | None:

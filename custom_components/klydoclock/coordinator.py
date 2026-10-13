@@ -29,9 +29,12 @@ from .const import (
     DISPLAY_OFF,
     DOMAIN,
     KEY_ENTER,
+    KEY_FAVORITE,
+    KEY_INFO,
     KEY_MENU,
     KEY_NEXT,
     KEY_PREVIOUS,
+    KEY_SETTINGS,
     KEY_SLEEP,
     MENU_FEED_ANGLE,
     MENU_MAX_STEPS,
@@ -200,7 +203,24 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
         )
 
     async def async_press_key(self, keycode: int) -> None:
-        """Send a remote key and pick up the result shortly after."""
+        """Send a remote key, leaving night mode around it when needed.
+
+        In night mode the first key press only wakes the display, so the key
+        is sent after waking and night mode restored afterwards. Info and
+        settings open screens meant to be used, so those leave the display awake.
+        The sleep key works in night mode and is sent as it is.
+        """
+        if keycode != KEY_SLEEP:
+            try:
+                state = await self._async_update_data()
+            except UpdateFailed as err:
+                raise HomeAssistantError(f"Klydoclock: {err}") from err
+            if state.display_mode != DISPLAY_OFF:
+                await self._run_exclusive(
+                    lambda: self._press_and_settle(keycode),
+                    stay_awake=keycode in (KEY_INFO, KEY_SETTINGS),
+                )
+                return
         await self.adb.keyevent(keycode)
 
         async def _refresh_later() -> None:
@@ -271,14 +291,24 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
 
         await self._run_exclusive(_set)
 
-    async def _run_exclusive(self, job: Callable[[], Awaitable[None]]) -> None:
-        """Run one navigation job; a newer one cancels it."""
+    async def _press_and_settle(self, keycode: int) -> None:
+        """Send a key and wait until the app has acted on it."""
+        await self.adb.keyevent(keycode)
+        if keycode in (KEY_NEXT, KEY_PREVIOUS):
+            await self._read_settled_state()
+        elif keycode == KEY_FAVORITE:
+            await asyncio.sleep(3.0)  # favorites land in the store after ~3 s
+
+    async def _run_exclusive(
+        self, job: Callable[[], Awaitable[None]], stay_awake: bool = False
+    ) -> None:
+        """Run one navigation job or key press; a newer one cancels it."""
         self.cancel_navigation()
         self._nav_task = asyncio.current_task()
         try:
             async with self._display_lock:
                 try:
-                    async with self._awake():
+                    async with self._awake(stay_awake):
                         await job()
                 except UpdateFailed as err:
                     raise HomeAssistantError(f"Klydoclock: {err}") from err
@@ -473,12 +503,12 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
         raise HomeAssistantError(f"Klydoclock did not reach display mode {target}")
 
     @asynccontextmanager
-    async def _awake(self) -> AsyncIterator[None]:
+    async def _awake(self, stay_awake: bool = False) -> AsyncIterator[None]:
         """Leave night mode for key navigation and return to it afterwards.
 
         In night mode the first key press only wakes the display and is
         otherwise swallowed. A cancelled job leaves the return to night mode
-        to the job that replaced it.
+        to the job that replaced it; with stay_awake nobody returns to it.
         """
         state = await self._async_update_data()
         if state.display_mode == DISPLAY_OFF:
@@ -500,7 +530,9 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
             restore = False
             raise
         finally:
-            if restore and self._night_pending:
+            if stay_awake:
+                self._night_pending = False
+            elif restore and self._night_pending:
                 try:
                     await self._step_display_to(DISPLAY_NIGHT)
                     self._night_pending = False
