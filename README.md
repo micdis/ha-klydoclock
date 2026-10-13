@@ -71,9 +71,18 @@ confirms that, because a menu left alone for about a minute falls back to FEED.
 
 EXPLORE cannot be selected this way: entering it asks for a category.
 
-In night mode the first key press only wakes the display. Navigation and mode
-changes therefore leave night mode first and return to it when they are done.
-With the display off they refuse to run.
+The info key opens a ring menu of the same look (with a delete entry at
+6 o'clock). The integration tells the two apart by their icon layout and never
+presses Enter in it. Like the home menu, it falls back to FEED when left open.
+
+In night mode the first key press only wakes the display. Navigation, mode
+changes and the buttons Next, Previous and Toggle favorite therefore leave
+night mode first and return to it when they are done. Info and Settings open
+screens meant to be used, so they leave the display awake. The Sleep key works
+in night mode and is sent as it is. With the display off, navigation and mode
+changes refuse to run, while the buttons send their key as before.
+
+A button press also cancels a navigation that is still running.
 
 Worth knowing:
 
