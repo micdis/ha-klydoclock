@@ -34,3 +34,29 @@ set_mode:
       selector:
         device:
           integration: klydoclock
+
+show_video:
+  fields:
+    video:
+      required: true
+      example: "klydoclock/waschmaschine_fertig.mp4"
+      selector:
+        text:
+    klydo:
+      required: true
+      example: "Moebius"
+      selector:
+        text:
+    mode:
+      required: false
+      selector:
+        select:
+          translation_key: playback_mode
+          options:
+            - feed
+            - favorite
+    device_id:
+      required: false
+      selector:
+        device:
+          integration: klydoclock

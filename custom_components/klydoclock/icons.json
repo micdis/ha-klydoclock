@@ -71,6 +71,9 @@
     },
     "set_mode": {
       "service": "mdi:playlist-music"
+    },
+    "show_video": {
+      "service": "mdi:movie-play"
     }
   }
 }

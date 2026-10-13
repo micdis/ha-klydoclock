@@ -131,6 +131,28 @@
           "description": "The clock to control. Only needed when more than one is set up."
         }
       }
+    },
+    "show_video": {
+      "name": "Show video",
+      "description": "Gives a klydo another video and brings it on display. The video is only uploaded when the clock holds a different file, e.g. after the app restored the original. The klydo keeps its name and colors.",
+      "fields": {
+        "video": {
+          "name": "Video",
+          "description": "MP4 file inside the Home Assistant config directory, e.g. klydoclock/washer_done.mp4. Square, 1080×1080, H.264."
+        },
+        "klydo": {
+          "name": "Klydo",
+          "description": "Name or id of the klydo whose video is replaced."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "List to navigate in; see Show klydo."
+        },
+        "device_id": {
+          "name": "Device",
+          "description": "The clock to control. Only needed when more than one is set up."
+        }
+      }
     }
   },
   "selector": {
