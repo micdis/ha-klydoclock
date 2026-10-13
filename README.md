@@ -57,6 +57,27 @@ Without `mode`, the current list is used if it holds the klydo, otherwise the
 feed, otherwise the favorites. If the clock is in another mode (for example
 EXPLORE), it is switched first.
 
+### Own videos
+
+Each klydo is an MP4 file on the clock (`/sdcard/gifs2/<mainLoop>/<mainLoop>.mp4`,
+1080×1080 H.264), and the app does not check these files. `klydoclock.show_video`
+gives a klydo another video and brings it on display:
+
+```yaml
+actions:
+  - action: klydoclock.show_video
+    data:
+      video: klydoclock/washer_done.mp4   # inside the HA config directory
+      klydo: "Moebius"                    # the klydo whose video is replaced
+```
+
+The file is only uploaded when the clock holds a different one, so a video the
+app has put back (its nightly sync can re-download klydos) is replaced again,
+and an unchanged one costs a single checksum. Uploading takes a few seconds per
+megabyte. The klydo keeps its name, artist and colors, and the original video
+is not kept: make a copy first if you want it back. Pick a klydo that stays in
+the feed; one the app drops from its catalog loses its folder.
+
 ### Switching the mode
 
 `klydoclock.set_mode` (and `show_klydo` when it needs to) opens the home menu

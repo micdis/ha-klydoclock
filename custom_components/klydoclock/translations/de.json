@@ -131,6 +131,28 @@
           "description": "Die zu steuernde Uhr. Nur nötig, wenn mehrere eingerichtet sind."
         }
       }
+    },
+    "show_video": {
+      "name": "Video anzeigen",
+      "description": "Gibt einem Klydo ein anderes Video und bringt ihn auf die Uhr. Hochgeladen wird nur, wenn auf der Uhr eine andere Datei liegt, etwa weil die App das Original zurückgespielt hat. Name und Farben des Klydos bleiben.",
+      "fields": {
+        "video": {
+          "name": "Video",
+          "description": "MP4-Datei im Konfigurationsordner von Home Assistant, z. B. klydoclock/waschmaschine_fertig.mp4. Quadratisch, 1080×1080, H.264."
+        },
+        "klydo": {
+          "name": "Klydo",
+          "description": "Name oder ID des Klydos, dessen Video ersetzt wird."
+        },
+        "mode": {
+          "name": "Modus",
+          "description": "Liste, in der navigiert wird; siehe Klydo anzeigen."
+        },
+        "device_id": {
+          "name": "Gerät",
+          "description": "Die zu steuernde Uhr. Nur nötig, wenn mehrere eingerichtet sind."
+        }
+      }
     }
   },
   "selector": {

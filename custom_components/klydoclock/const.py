@@ -18,8 +18,20 @@ ADB_KEY_FILE = "klydoclock_adbkey"
 
 SERVICE_SHOW_KLYDO = "show_klydo"
 SERVICE_SET_MODE = "set_mode"
+SERVICE_SHOW_VIDEO = "show_video"
 ATTR_KLYDO = "klydo"
 ATTR_MODE = "mode"
+ATTR_VIDEO = "video"
+
+# Each klydo plays /sdcard/gifs2/<mainLoop>/<mainLoop>.mp4. The app keeps no
+# checksum of these files, so a klydo can be given another video.
+VIDEO_DIR = "/data/media/0/gifs2"
+VIDEO_OWNER = "media_rw:media_video"
+VIDEO_LABEL = "u:object_r:media_rw_data_file:s0"
+MAX_VIDEO_BYTES = 20 * 1024 * 1024
+# Raw bytes per shell call when uploading; adb-shell's file sync push stalls
+# against this clock, base64 through the shell does not.
+UPLOAD_CHUNK = 24 * 1024
 
 # Playback modes the integration can switch to, keyed by service option.
 MODE_FEED = "FEED"

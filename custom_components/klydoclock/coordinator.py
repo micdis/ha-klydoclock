@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
+import hashlib
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -44,6 +47,10 @@ from .const import (
     NAV_BATCH,
     SCAN_INTERVAL,
     SETTINGS_PATH,
+    UPLOAD_CHUNK,
+    VIDEO_DIR,
+    VIDEO_LABEL,
+    VIDEO_OWNER,
 )
 from .datastore import parse_preferences
 from .menu import angle_distance, selection_angle
@@ -281,6 +288,64 @@ class KlydoCoordinator(DataUpdateCoordinator[KlydoState]):
         otherwise the feed, otherwise the favorites.
         """
         await self._run_exclusive(lambda: self._navigate_to(klydo_id, mode))
+
+    async def async_show_video(
+        self, video: Path, klydo_id: str, mode: str | None = None
+    ) -> None:
+        """Make klydo_id play the given video file, then bring it on display.
+
+        The file is only uploaded when the clock holds a different one, so a
+        video the app has put back (e.g. by its nightly sync) is replaced
+        again, and an unchanged one costs a single checksum.
+        """
+        klydo = self.catalog.get(klydo_id)
+        if klydo is None:
+            raise ServiceValidationError(f"The clock knows no klydo with id {klydo_id}")
+        data = await self.hass.async_add_executor_job(video.read_bytes)
+
+        async def _show() -> None:
+            if await self._ensure_video(klydo.main_loop, data):
+                state = await self._read_settled_state()
+                if state.klydo_id == klydo_id:
+                    # The player keeps the old file open; step away so that
+                    # coming back opens the new one.
+                    await self.adb.keyevent(KEY_NEXT)
+                    await self._read_settled_state()
+            await self._navigate_to(klydo_id, mode)
+
+        await self._run_exclusive(_show)
+
+    async def _ensure_video(self, main_loop: str, data: bytes) -> bool:
+        """Put data in place as the klydo's video; return whether it was uploaded."""
+        folder = f"{VIDEO_DIR}/{main_loop}"
+        target = f"{folder}/{main_loop}.mp4"
+        tmp = f"{folder}/.{main_loop}.mp4.tmp"
+        want = hashlib.md5(data).hexdigest()
+        if (await self.adb.shell(f"md5sum '{target}' 2>/dev/null")).split()[:1] == [want]:
+            return False
+        if await self.adb.shell(f"test -d '{folder}' && echo ok") != "ok":
+            # Only the app creates klydo folders; its midnight cleanup deletes
+            # any folder without a klydo in its database.
+            raise HomeAssistantError(f"Klydoclock: no video folder for {main_loop}")
+        await self.adb.shell(f"rm -f '{tmp}'")
+        for start in range(0, len(data), UPLOAD_CHUNK):
+            chunk = base64.b64encode(data[start : start + UPLOAD_CHUNK]).decode()
+            if await self.adb.shell(f"echo '{chunk}' | base64 -d >> '{tmp}' && echo ok") != "ok":
+                await self.adb.shell(f"rm -f '{tmp}'")
+                raise HomeAssistantError("Klydoclock: video upload failed")
+        if (await self.adb.shell(f"md5sum '{tmp}'")).split()[:1] != [want]:
+            await self.adb.shell(f"rm -f '{tmp}'")
+            raise HomeAssistantError("Klydoclock: uploaded video is corrupt")
+        # Same owner, mode and SELinux label as the app's own files, then an
+        # atomic rename, so the player never sees a half-written file.
+        await self.adb.shell(
+            f"chown {VIDEO_OWNER} '{tmp}' && chmod 664 '{tmp}' && "
+            f"chcon {VIDEO_LABEL} '{tmp}' && mv -f '{tmp}' '{target}'"
+        )
+        if (await self.adb.shell(f"md5sum '{target}'")).split()[:1] != [want]:
+            raise HomeAssistantError("Klydoclock: video could not be put in place")
+        _LOGGER.info("Uploaded %s bytes as the video of %s", len(data), main_loop)
+        return True
 
     async def async_set_mode(self, mode: str) -> None:
         """Switch the clock to FEED or FAVORITE mode through the home menu."""
