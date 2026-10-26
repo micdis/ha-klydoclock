@@ -71,12 +71,19 @@ actions:
       klydo: "Moebius"                    # the klydo whose video is replaced
 ```
 
-The file is only uploaded when the clock holds a different one, so a video the
+Nothing is copied when the clock already holds that file, so a video the
 app has put back (its nightly sync can re-download klydos) is replaced again,
-and an unchanged one costs a single checksum. Uploading takes a few seconds per
-megabyte. The klydo keeps its name, artist and colors, and the original video
-is not kept: make a copy first if you want it back. Pick a klydo that stays in
-the feed; one the app drops from its catalog loses its folder.
+and an unchanged one costs a single checksum. Every uploaded video is also kept
+on the clock in `/sdcard/klydoclock-ha/<md5>.mp4`: only the first use of a file
+uploads it (a few seconds per megabyte), later switches are a local copy. The
+klydo keeps its name, artist and colors. The original video is not kept: make a
+copy first if you want it back. Pick a klydo that stays in the feed; one the app
+drops from its catalog loses its folder.
+
+`klydoclock.set_video` takes the same `video` and `klydo` but does not navigate,
+e.g. to put a klydo's own video back once a signal is over, so that it looks
+normal when you browse the feed. If that klydo is on display, the clock steps
+away and back so the new file plays.
 
 ### Switching the mode
 

@@ -28,6 +28,7 @@ from .const import (
     PACKAGE,
     SERVICE_SET_MODE,
     SERVICE_SHOW_KLYDO,
+    SERVICE_SET_VIDEO,
     SERVICE_SHOW_VIDEO,
 )
 from .coordinator import KlydoConfigEntry, KlydoCoordinator
@@ -62,6 +63,14 @@ SHOW_VIDEO_SCHEMA = vol.Schema(
         vol.Required(ATTR_VIDEO): cv.string,
         vol.Required(ATTR_KLYDO): cv.string,
         vol.Optional(ATTR_MODE): vol.In(list(MODES)),
+        vol.Optional(ATTR_DEVICE_ID): cv.string,
+    }
+)
+
+SET_VIDEO_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_VIDEO): cv.string,
+        vol.Required(ATTR_KLYDO): cv.string,
         vol.Optional(ATTR_DEVICE_ID): cv.string,
     }
 )
@@ -110,6 +119,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             video, klydo_id, MODES[mode] if mode else None
         )
 
+    async def set_video(call: ServiceCall) -> None:
+        coordinator = _coordinator_for(hass, call)
+        video = await hass.async_add_executor_job(
+            _video_file, hass.config.config_dir, call.data[ATTR_VIDEO]
+        )
+        klydo_id = coordinator.resolve_klydo_id(call.data[ATTR_KLYDO])
+        await coordinator.async_set_video(video, klydo_id)
+
     hass.services.async_register(
         DOMAIN, SERVICE_SHOW_KLYDO, show_klydo, schema=SHOW_KLYDO_SCHEMA
     )
@@ -118,6 +135,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SHOW_VIDEO, show_video, schema=SHOW_VIDEO_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_VIDEO, set_video, schema=SET_VIDEO_SCHEMA
     )
     return True
 

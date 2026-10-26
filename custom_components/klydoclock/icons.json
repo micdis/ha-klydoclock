@@ -74,6 +74,9 @@
     },
     "show_video": {
       "service": "mdi:movie-play"
+    },
+    "set_video": {
+      "service": "mdi:movie-edit"
     }
   }
 }

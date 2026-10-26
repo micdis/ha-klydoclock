@@ -153,6 +153,24 @@
           "description": "The clock to control. Only needed when more than one is set up."
         }
       }
+    },
+    "set_video": {
+      "name": "Set video",
+      "description": "Gives a klydo another video without bringing it on display, e.g. to put its own video back after a signal. If the klydo is on display, the clock steps away and back so the new video plays.",
+      "fields": {
+        "video": {
+          "name": "Video",
+          "description": "MP4 file inside the Home Assistant config directory, e.g. klydoclock/original/moebius.mp4."
+        },
+        "klydo": {
+          "name": "Klydo",
+          "description": "Name or id of the klydo whose video is replaced."
+        },
+        "device_id": {
+          "name": "Device",
+          "description": "The clock to control. Only needed when more than one is set up."
+        }
+      }
     }
   },
   "selector": {
