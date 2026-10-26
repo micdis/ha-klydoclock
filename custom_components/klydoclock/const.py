@@ -19,6 +19,7 @@ ADB_KEY_FILE = "klydoclock_adbkey"
 SERVICE_SHOW_KLYDO = "show_klydo"
 SERVICE_SET_MODE = "set_mode"
 SERVICE_SHOW_VIDEO = "show_video"
+SERVICE_SET_VIDEO = "set_video"
 ATTR_KLYDO = "klydo"
 ATTR_MODE = "mode"
 ATTR_VIDEO = "video"
@@ -28,6 +29,10 @@ ATTR_VIDEO = "video"
 VIDEO_DIR = "/data/media/0/gifs2"
 VIDEO_OWNER = "media_rw:media_video"
 VIDEO_LABEL = "u:object_r:media_rw_data_file:s0"
+# Every uploaded video is also kept here, named by its MD5, so switching a
+# klydo between videos it had before is a local copy instead of an upload.
+# Outside gifs2, which the app's midnight cleanup prunes.
+VIDEO_CACHE = "/data/media/0/klydoclock-ha"
 MAX_VIDEO_BYTES = 20 * 1024 * 1024
 # Raw bytes per shell call when uploading; adb-shell's file sync push stalls
 # against this clock, base64 through the shell does not.

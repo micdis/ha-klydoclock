@@ -60,3 +60,21 @@ show_video:
       selector:
         device:
           integration: klydoclock
+
+set_video:
+  fields:
+    video:
+      required: true
+      example: "klydoclock/original/moebius.mp4"
+      selector:
+        text:
+    klydo:
+      required: true
+      example: "Moebius"
+      selector:
+        text:
+    device_id:
+      required: false
+      selector:
+        device:
+          integration: klydoclock

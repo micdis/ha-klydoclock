@@ -153,6 +153,24 @@
           "description": "Die zu steuernde Uhr. Nur nötig, wenn mehrere eingerichtet sind."
         }
       }
+    },
+    "set_video": {
+      "name": "Video setzen",
+      "description": "Gibt einem Klydo ein anderes Video, ohne ihn anzuzeigen, z. B. um nach einem Signal sein eigenes Video zurückzuspielen. Läuft der Klydo gerade, wechselt die Uhr kurz weg und zurück, damit das neue Video spielt.",
+      "fields": {
+        "video": {
+          "name": "Video",
+          "description": "MP4-Datei im Konfigurationsordner von Home Assistant, z. B. klydoclock/original/moebius.mp4."
+        },
+        "klydo": {
+          "name": "Klydo",
+          "description": "Name oder ID des Klydos, dessen Video ersetzt wird."
+        },
+        "device_id": {
+          "name": "Gerät",
+          "description": "Die zu steuernde Uhr. Nur nötig, wenn mehrere eingerichtet sind."
+        }
+      }
     }
   },
   "selector": {
