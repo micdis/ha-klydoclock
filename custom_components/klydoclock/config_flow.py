@@ -10,14 +10,23 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from . import async_get_adb
 from .adb import KlydoConnectionError, KlydoRootError
 from .const import CONF_MDNS, DEFAULT_PORT, DOMAIN, PACKAGE, SETTINGS_PATH
-from .mdns import name_matches_serial
+from .mdns import AdbAnnouncement, async_browse, name_matches_serial
 
 _LOGGER = logging.getLogger(__name__)
+
+CONF_DEVICE = "device"
+MANUAL = "manual"
 
 SCHEMA = vol.Schema(
     {
@@ -33,12 +42,17 @@ class KlydoclockConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Start with no announcements found."""
+        self._found: dict[str, AdbAnnouncement] = {}
+
     async def _async_validate(
         self, host: str, port: int, use_mdns: bool
-    ) -> tuple[str | None, int, dict[str, str]]:
+    ) -> tuple[str | None, str, int, dict[str, str]]:
         """Check that a Klydoclock answers at host:port.
 
-        Return (serial, port, errors); with mDNS, port is the one that answered.
+        Return (serial, host, port, errors); with mDNS, host and port are the
+        ones that answered.
         """
         errors: dict[str, str] = {}
         serial = None
@@ -57,30 +71,92 @@ class KlydoclockConfigFlow(ConfigFlow, domain=DOMAIN):
             errors["base"] = "cannot_connect"
         finally:
             await adb.close()
-        return serial, adb.port, errors
+        return serial, adb.host, adb.port, errors
 
     async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Look for ADB announcements; offer them, or ask for an address."""
+        configured = {
+            entry.unique_id for entry in self._async_current_entries(include_ignore=False)
+        }
+        self._found = {
+            f"{a.name}|{a.host}": a
+            for a in await async_browse(self.hass)
+            if a.serial not in configured
+        }
+        if not self._found:
+            return await self.async_step_manual()
+        return await self.async_step_pick()
+
+    async def async_step_pick(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Let the user pick one of the announced devices.
+
+        Every Android device with network ADB announces itself the same way,
+        so only the device the user picks is contacted and checked.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            choice = user_input[CONF_DEVICE]
+            if choice == MANUAL:
+                return await self.async_step_manual()
+            found = self._found[choice]
+            serial, host, port, errors = await self._async_validate(
+                found.host, found.port, True
+            )
+            if not errors:
+                return await self._async_finish(serial, host, port, True)
+
+        options = [
+            SelectOptionDict(value=key, label=f"{a.instance} ({a.host}:{a.port})")
+            for key, a in sorted(self._found.items())
+        ]
+        options.append(SelectOptionDict(value=MANUAL, label=MANUAL))
+        return self.async_show_form(
+            step_id="pick",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_DEVICE): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options,
+                            mode=SelectSelectorMode.LIST,
+                            translation_key="device",
+                        )
+                    )
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_manual(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Ask for the address of the clock and verify it."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            host = user_input[CONF_HOST].strip()
             use_mdns = user_input[CONF_MDNS]
-            serial, port, errors = await self._async_validate(
-                host, user_input[CONF_PORT], use_mdns
+            serial, host, port, errors = await self._async_validate(
+                user_input[CONF_HOST].strip(), user_input[CONF_PORT], use_mdns
             )
             if not errors:
-                data = {CONF_HOST: host, CONF_PORT: port, CONF_MDNS: use_mdns}
-                await self.async_set_unique_id(serial or host)
-                self._abort_if_unique_id_configured(updates=data)
-                return self.async_create_entry(title="Klydoclock", data=data)
+                return await self._async_finish(serial, host, port, use_mdns)
 
         return self.async_show_form(
-            step_id="user",
+            step_id="manual",
             data_schema=self.add_suggested_values_to_schema(SCHEMA, user_input),
             errors=errors,
         )
+
+    async def _async_finish(
+        self, serial: str | None, host: str, port: int, use_mdns: bool
+    ) -> ConfigFlowResult:
+        """Create the entry for a verified clock."""
+        data = {CONF_HOST: host, CONF_PORT: port, CONF_MDNS: use_mdns}
+        await self.async_set_unique_id(serial or host)
+        self._abort_if_unique_id_configured(updates=data)
+        return self.async_create_entry(title="Klydoclock", data=data)
 
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
@@ -130,10 +206,9 @@ class KlydoclockConfigFlow(ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
-            host = user_input[CONF_HOST].strip()
             use_mdns = user_input[CONF_MDNS]
-            serial, port, errors = await self._async_validate(
-                host, user_input[CONF_PORT], use_mdns
+            serial, host, port, errors = await self._async_validate(
+                user_input[CONF_HOST].strip(), user_input[CONF_PORT], use_mdns
             )
             if not errors:
                 await self.async_set_unique_id(serial or host)

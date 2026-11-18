@@ -145,8 +145,13 @@ your Home Assistant configuration and restart.
 
 ## Setup
 
-Settings → Devices & services → Add integration → **Klydoclock**, then enter
-the IP address of the clock. The port stays at 5555.
+Settings → Devices & services → Add integration → **Klydoclock**. The
+integration looks for devices that announce ADB via mDNS and lists them; a
+Klydoclock shows up as `adb-<serial>` with its address and port. Other Android
+devices with network ADB may be listed as well; only the device you pick is
+contacted and checked. If nothing is found (older firmware, or Home Assistant
+in another network segment), you enter the IP address yourself; the port is
+5555 on firmware before Clock OS 642.
 
 ### Clock OS 642 and newer: dynamic ADB port
 

@@ -18,7 +18,7 @@
   "requirements": [
     "adb-shell[async]>=0.4.4"
   ],
-  "version": "0.7.0",
+  "version": "0.8.0",
   "zeroconf": [
     "_adb._tcp.local.",
     "_adb-tls-connect._tcp.local."

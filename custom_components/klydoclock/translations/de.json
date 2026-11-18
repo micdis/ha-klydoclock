@@ -1,8 +1,15 @@
 {
   "config": {
     "step": {
-      "user": {
+      "pick": {
         "title": "Klydoclock verbinden",
+        "description": "Diese Geräte bieten ADB in deinem Netz an. Eine Klydoclock erscheint als adb-<Seriennummer>; andere Android-Geräte mit Netzwerk-ADB tauchen hier ebenfalls auf. Nur das ausgewählte Gerät wird kontaktiert und geprüft.",
+        "data": {
+          "device": "Gerät"
+        }
+      },
+      "manual": {
+        "title": "Adresse der Uhr eingeben",
         "description": "Die Uhr wird im lokalen Netz über ADB angesprochen. Gib ihr im Router eine feste IP-Adresse. Ab Clock OS 642 wechselt der ADB-Port bei jedem Start; mit mDNS findet die Integration ihn selbst.",
         "data": {
           "host": "IP-Adresse",
@@ -181,6 +188,11 @@
       "options": {
         "feed": "Feed",
         "favorite": "Favoriten"
+      }
+    },
+    "device": {
+      "options": {
+        "manual": "Adresse manuell eingeben"
       }
     }
   }

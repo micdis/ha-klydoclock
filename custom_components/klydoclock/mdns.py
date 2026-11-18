@@ -9,6 +9,7 @@ serial number when it is known, otherwise by its IP address.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import logging
 
 from zeroconf import ServiceStateChange, Zeroconf
@@ -37,14 +38,32 @@ def name_matches_serial(name: str, service_type: str, serial: str) -> bool:
     return rest == serial or rest.startswith(f"{serial}-")
 
 
-async def async_find_endpoint(
-    hass: HomeAssistant, host: str, serial: str | None = None
-) -> tuple[str, int] | None:
-    """Return (address, port) the clock announces for ADB, or None.
+@dataclass(frozen=True)
+class AdbAnnouncement:
+    """One ADB service announced on the network."""
 
-    With a serial, the announcement is matched by name and may carry a new
-    address. Without one, or if no name matches, it is matched by host.
-    """
+    service_type: str
+    name: str
+    serial: str | None
+    host: str
+    port: int
+
+    @property
+    def instance(self) -> str:
+        """The instance name, e.g. adb-a2311igtx1f36o3y."""
+        suffix = f".{self.service_type}"
+        return self.name[: -len(suffix)] if self.name.endswith(suffix) else self.name
+
+
+def serial_from_name(name: str, service_type: str) -> str | None:
+    """Return the serial in an ``adb-<serial>`` name (TLS names keep their id)."""
+    suffix = f".{service_type}"
+    instance = name[: -len(suffix)] if name.endswith(suffix) else name
+    return instance[len("adb-") :] if instance.startswith("adb-") else None
+
+
+async def async_browse(hass: HomeAssistant) -> list[AdbAnnouncement]:
+    """Return every ADB service announced on the network, resolved."""
     aiozc = await zeroconf.async_get_async_instance(hass)
     names: set[tuple[str, str]] = set()
 
@@ -65,33 +84,52 @@ async def async_find_endpoint(
     finally:
         await browser.async_cancel()
 
-    # Announcements named after the serial first, then all others by address.
-    candidates = sorted(
-        names,
-        key=lambda item: not (serial and name_matches_serial(item[1], item[0], serial)),
-    )
-    for service_type, name in candidates:
-        by_serial = bool(serial and name_matches_serial(name, service_type, serial))
+    async def resolve(service_type: str, name: str) -> list[AdbAnnouncement]:
         info = AsyncServiceInfo(service_type, name)
         if not await info.async_request(aiozc.zeroconf, RESOLVE_TIMEOUT_MS):
-            continue
-        addresses = info.parsed_addresses()
-        if not info.port or not addresses:
-            continue
-        if by_serial:
-            address = host if host in addresses else addresses[0]
-        elif host in addresses:
-            address = host
-        else:
-            continue
-        _LOGGER.debug("ADB announced at %s:%s (%s)", address, info.port, name)
-        return address, info.port
+            return []
+        if not info.port:
+            return []
+        serial = serial_from_name(name, service_type)
+        # IPv4 first: adb-shell and the stored host are IPv4 addresses.
+        addresses = sorted(info.parsed_addresses(), key=lambda a: ":" in a)
+        return [
+            AdbAnnouncement(service_type, name, serial, address, info.port)
+            for address in addresses
+        ]
+
+    results = await asyncio.gather(*(resolve(t, n) for t, n in sorted(names)))
+    return [announcement for found in results for announcement in found]
+
+
+async def async_find_endpoint(
+    hass: HomeAssistant, host: str, serial: str | None = None
+) -> tuple[str, int] | None:
+    """Return (address, port) the clock announces for ADB, or None.
+
+    With a serial, the announcement is matched by name and may carry a new
+    address. Without one, or if no name matches, it is matched by host.
+    """
+    announcements = await async_browse(hass)
+    if serial:
+        mine = [
+            a
+            for a in announcements
+            if name_matches_serial(a.name, a.service_type, serial)
+        ]
+        # Keep the known address if the clock still announces it.
+        for a in sorted(mine, key=lambda a: a.host != host):
+            _LOGGER.debug("ADB announced at %s:%s (%s)", a.host, a.port, a.name)
+            return a.host, a.port
+    for a in announcements:
+        if a.host == host:
+            _LOGGER.debug("ADB announced at %s:%s (%s)", a.host, a.port, a.name)
+            return a.host, a.port
 
     _LOGGER.debug(
-        "No ADB announcement for %s (serial %s) among %d services: %s",
+        "No ADB announcement for %s (serial %s) among: %s",
         host,
         serial,
-        len(names),
-        sorted(n for _, n in names),
+        sorted({a.name for a in announcements}),
     )
     return None
