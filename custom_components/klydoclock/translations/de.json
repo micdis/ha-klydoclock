@@ -3,18 +3,20 @@
     "step": {
       "user": {
         "title": "Klydoclock verbinden",
-        "description": "Die Uhr wird im lokalen Netz über ADB angesprochen. Gib ihr im Router eine feste IP-Adresse.",
+        "description": "Die Uhr wird im lokalen Netz über ADB angesprochen. Gib ihr im Router eine feste IP-Adresse. Ab Clock OS 642 wechselt der ADB-Port bei jedem Start; mit mDNS findet die Integration ihn selbst.",
         "data": {
           "host": "IP-Adresse",
-          "port": "ADB-Port"
+          "port": "ADB-Port",
+          "mdns": "Port per mDNS finden (ab Clock OS 642)"
         }
       },
       "reconfigure": {
         "title": "Klydoclock neu konfigurieren",
-        "description": "Ändere die Adresse, unter der die Uhr erreichbar ist.",
+        "description": "Ändere die Adresse, unter der die Uhr erreichbar ist. Mit mDNS wird der Port nachgeschlagen, sobald der gespeicherte nicht mehr antwortet.",
         "data": {
           "host": "IP-Adresse",
-          "port": "ADB-Port"
+          "port": "ADB-Port",
+          "mdns": "Port per mDNS finden (ab Clock OS 642)"
         }
       }
     },
@@ -26,7 +28,8 @@
     "abort": {
       "already_configured": "Diese Uhr ist bereits eingerichtet.",
       "reconfigure_successful": "Die neue Adresse wurde gespeichert.",
-      "unique_id_mismatch": "Unter dieser Adresse meldet sich eine andere Uhr."
+      "unique_id_mismatch": "Unter dieser Adresse meldet sich eine andere Uhr.",
+      "not_klydoclock": "Auf diesem Gerät läuft die Klydoclock-App nicht."
     }
   },
   "entity": {

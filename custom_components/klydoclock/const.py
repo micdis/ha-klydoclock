@@ -5,6 +5,12 @@ from datetime import timedelta
 DOMAIN = "klydoclock"
 
 DEFAULT_PORT = 5555
+# From Clock OS 642 on, adbd picks a new port at every start and announces it
+# via mDNS. With CONF_MDNS set, the port is looked up there when the stored
+# one stops answering.
+CONF_MDNS = "mdns"
+MDNS_SERVICE_TYPES = ["_adb._tcp.local.", "_adb-tls-connect._tcp.local."]
+MDNS_BROWSE_SECONDS = 3.0
 SCAN_INTERVAL = timedelta(seconds=10)
 CATALOG_MIN_REFRESH = timedelta(minutes=10)
 
