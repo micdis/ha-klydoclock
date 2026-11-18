@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -45,6 +46,7 @@ class KlydoclockConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Start with no announcements found."""
         self._found: dict[str, AdbAnnouncement] = {}
+        self._browse_task: asyncio.Task[dict[str, AdbAnnouncement]] | None = None
 
     async def _async_validate(
         self, host: str, port: int, use_mdns: bool
@@ -76,18 +78,35 @@ class KlydoclockConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Look for ADB announcements; offer them, or ask for an address."""
+        """Look for ADB announcements while showing that the search is running."""
+        if self._browse_task is None:
+            self._browse_task = self.hass.async_create_task(
+                self._async_browse(), eager_start=False
+            )
+        if not self._browse_task.done():
+            return self.async_show_progress(
+                step_id="user",
+                progress_action="browse",
+                progress_task=self._browse_task,
+            )
+        self._found = self._browse_task.result()
+        return self.async_show_progress_done(
+            next_step_id="pick" if self._found else "manual"
+        )
+
+    async def _async_browse(self) -> dict[str, AdbAnnouncement]:
+        """Return the ADB announcements of devices not set up yet."""
         configured = {
             entry.unique_id for entry in self._async_current_entries(include_ignore=False)
         }
-        self._found = {
-            f"{a.name}|{a.host}": a
-            for a in await async_browse(self.hass)
-            if a.serial not in configured
+        try:
+            announcements = await async_browse(self.hass)
+        except Exception:  # noqa: BLE001 - fall back to entering the address
+            _LOGGER.exception("Looking for ADB announcements failed")
+            return {}
+        return {
+            f"{a.name}|{a.host}": a for a in announcements if a.serial not in configured
         }
-        if not self._found:
-            return await self.async_step_manual()
-        return await self.async_step_pick()
 
     async def async_step_pick(
         self, user_input: dict[str, Any] | None = None

@@ -27,6 +27,9 @@
         }
       }
     },
+    "progress": {
+      "browse": "Looking for devices that announce ADB on your network (mDNS). This takes a few seconds."
+    },
     "error": {
       "cannot_connect": "No ADB connection to this address.",
       "not_klydoclock": "This device does not run the Klydoclock app.",
