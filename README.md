@@ -126,7 +126,7 @@ Worth knowing:
 
 ## Requirements
 
-- Klydoclock with Clock OS 600 or newer (developed against app version 632)
+- Klydoclock with Clock OS 600 or newer (developed against app version 632; Clock OS 642 and newer need the mDNS option, see below)
 - Home Assistant 2025.2 or newer, on the same network as the clock
 - A fixed IP address for the clock (DHCP reservation in your router)
 
@@ -145,8 +145,39 @@ your Home Assistant configuration and restart.
 
 ## Setup
 
-Settings → Devices & services → Add integration → **Klydoclock**, then enter
-the IP address of the clock. The port stays at 5555.
+Settings → Devices & services → Add integration → **Klydoclock**. The
+integration looks for devices that announce ADB via mDNS and lists them; a
+Klydoclock shows up as `adb-<serial>` with its address and port. Other Android
+devices with network ADB may be listed as well; only the device you pick is
+contacted and checked. If nothing is found (older firmware, or Home Assistant
+in another network segment), you enter the IP address yourself; the port is
+5555 on firmware before Clock OS 642.
+
+### Clock OS 642 and newer: dynamic ADB port
+
+From Clock OS 642 on, adbd no longer listens on 5555. It picks a new port at
+every start and announces it via mDNS (`_adb._tcp`). Leave **Find the port via
+mDNS** on (the default for new setups; existing entries can switch it on
+through *Reconfigure*):
+
+- The clock announces itself as `adb-<serial>`, and the serial is what the
+  integration identifies the clock by. So the announcement is found by name,
+  and a changed IP address is followed as well; a fixed IP address is no
+  longer required. Clocks set up without a serial are matched by IP address.
+- When the stored address stops answering, the integration browses mDNS for
+  the clock's announcement and reconnects there. This also covers `adb root`,
+  after which adbd may come back on another port.
+- Home Assistant's own zeroconf discovery keeps the stored address up to date
+  when the clock re-announces. Announcements only update clocks that are
+  already set up; other Android devices that announce ADB are ignored and
+  never contacted.
+- The last working address is saved, so a restart of Home Assistant starts
+  there.
+
+mDNS is link-local: Home Assistant must be in the same network segment as the
+clock, or your router/firewall must reflect mDNS between VLANs (e.g. an mDNS
+repeater). To see what the clock announces, run `dns-sd -B _adb._tcp local.`
+on a Mac or `avahi-browse -rt _adb._tcp` on Linux.
 
 ## Example
 

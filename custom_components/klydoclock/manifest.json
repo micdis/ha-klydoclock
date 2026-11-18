@@ -5,6 +5,9 @@
     "@micdis"
   ],
   "config_flow": true,
+  "dependencies": [
+    "zeroconf"
+  ],
   "documentation": "https://github.com/micdis/ha-klydoclock",
   "integration_type": "device",
   "iot_class": "local_polling",
@@ -15,5 +18,9 @@
   "requirements": [
     "adb-shell[async]>=0.4.4"
   ],
-  "version": "0.6.0"
+  "version": "0.8.0",
+  "zeroconf": [
+    "_adb._tcp.local.",
+    "_adb-tls-connect._tcp.local."
+  ]
 }

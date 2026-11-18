@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 import logging
 from pathlib import Path
 
@@ -38,20 +39,54 @@ def load_signer(key_path: str) -> PythonRSASigner:
 class KlydoAdb:
     """Serialised access to one clock."""
 
-    def __init__(self, host: str, port: int, signer: PythonRSASigner | None) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        signer: PythonRSASigner | None,
+        resolver: Callable[[], Awaitable[tuple[str, int] | None]] | None = None,
+        on_move: Callable[[str, int], None] | None = None,
+    ) -> None:
         self.host = host
         self.port = port
         self._signer = signer
+        self._resolver = resolver
+        self._on_move = on_move
         self._device: AdbDeviceTcpAsync | None = None
         self._lock = asyncio.Lock()
         self._closed = False
 
-    async def _open(self) -> AdbDeviceTcpAsync:
-        device = AdbDeviceTcpAsync(self.host, self.port, default_transport_timeout_s=9.0)
+    async def _connect(self, host: str, port: int) -> AdbDeviceTcpAsync:
+        device = AdbDeviceTcpAsync(host, port, default_transport_timeout_s=9.0)
         await device.connect(
             rsa_keys=[self._signer] if self._signer else None, auth_timeout_s=10.0
         )
         return device
+
+    async def _open(self) -> AdbDeviceTcpAsync:
+        """Connect at the known address; if that fails, ask mDNS where adbd is now."""
+        try:
+            return await self._connect(self.host, self.port)
+        except Exception as err:
+            if self._resolver is None:
+                raise
+            found = await self._resolver()
+            if found is None or found == (self.host, self.port):
+                raise
+            host, port = found
+            _LOGGER.info(
+                "ADB moved from %s:%s to %s:%s (%s)",
+                self.host,
+                self.port,
+                host,
+                port,
+                type(err).__name__,
+            )
+            device = await self._connect(host, port)
+            self.host, self.port = host, port
+            if self._on_move is not None:
+                self._on_move(host, port)
+            return device
 
     async def _ensure_connected(self) -> AdbDeviceTcpAsync:
         if self._device is not None and self._device.available:
@@ -69,7 +104,8 @@ class KlydoAdb:
                 await device.close()
             except Exception:  # noqa: BLE001
                 pass
-            for delay in (1.5, 3.0):
+            # With mDNS, adbd may come back on another port; _open looks it up.
+            for delay in (1.5, 3.0, 5.0):
                 await asyncio.sleep(delay)
                 try:
                     device = await self._open()
@@ -98,7 +134,8 @@ class KlydoAdb:
             if self._closed:
                 raise KlydoConnectionError(f"{self.host}:{self.port}: connection closed")
             try:
-                async with asyncio.timeout(TIMEOUT + 12):
+                # Room for an mDNS lookup (and a second one after adb root).
+                async with asyncio.timeout(TIMEOUT + 30):
                     device = await self._ensure_connected()
                     return await getattr(device, method)(
                         command, read_timeout_s=TIMEOUT, decode=decode

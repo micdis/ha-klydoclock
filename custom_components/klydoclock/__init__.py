@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 import re
 
@@ -9,7 +10,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_DEVICE_ID, CONF_HOST, CONF_PORT, Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.storage import STORAGE_DIR
@@ -18,6 +19,7 @@ from homeassistant.helpers.typing import ConfigType
 from .adb import KlydoAdb, KlydoConnectionError, KlydoRootError, load_signer
 from .const import (
     ADB_KEY_FILE,
+    CONF_MDNS,
     ATTR_KLYDO,
     ATTR_MODE,
     ATTR_VIDEO,
@@ -32,6 +34,7 @@ from .const import (
     SERVICE_SHOW_VIDEO,
 )
 from .coordinator import KlydoConfigEntry, KlydoCoordinator
+from .mdns import async_find_endpoint
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
@@ -159,18 +162,50 @@ def _video_file(config_dir: str, value: str) -> Path:
     return path
 
 
-async def async_get_adb(hass: HomeAssistant, host: str, port: int) -> KlydoAdb:
+async def async_get_adb(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    use_mdns: bool = False,
+    serial: str | None = None,
+    on_move: Callable[[str, int], None] | None = None,
+) -> KlydoAdb:
     """Create an ADB client using the integration's key pair."""
     signer = await hass.async_add_executor_job(
         load_signer, hass.config.path(STORAGE_DIR, ADB_KEY_FILE)
     )
-    return KlydoAdb(host, port, signer)
+    resolver = None
+    adb: KlydoAdb
+
+    if use_mdns:
+
+        async def resolver() -> tuple[str, int] | None:
+            return await async_find_endpoint(hass, adb.host, serial)
+
+    adb = KlydoAdb(host, port, signer, resolver, on_move)
+    return adb
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: KlydoConfigEntry) -> bool:
     """Set up a clock from a config entry."""
+
+    @callback
+    def store_endpoint(host: str, port: int) -> None:
+        # Start from the last known address after a restart of Home Assistant.
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_HOST: host, CONF_PORT: port}
+        )
+
+    # The unique id is the clock's serial (ro.serialno) unless the clock did
+    # not report one at setup; then it is the host and matches no mDNS name.
+    serial = entry.unique_id if entry.unique_id != entry.data[CONF_HOST] else None
     adb = await async_get_adb(
-        hass, entry.data[CONF_HOST], entry.data.get(CONF_PORT, DEFAULT_PORT)
+        hass,
+        entry.data[CONF_HOST],
+        entry.data.get(CONF_PORT, DEFAULT_PORT),
+        entry.data.get(CONF_MDNS, False),
+        serial,
+        store_endpoint,
     )
     coordinator = KlydoCoordinator(hass, entry, adb)
     try:
