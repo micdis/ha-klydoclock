@@ -3,7 +3,7 @@
     "step": {
       "pick": {
         "title": "Connect to Klydoclock",
-        "description": "These devices announce ADB on your network. A Klydoclock appears as adb-<serial>; other Android devices with network ADB show up here too. Only the device you pick is contacted and checked.",
+        "description": "These devices announce ADB on your network. A Klydoclock appears as adb- followed by its serial number; other Android devices with network ADB show up here too. Only the device you pick is contacted and checked.",
         "data": {
           "device": "Device"
         }

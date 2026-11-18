@@ -3,7 +3,7 @@
     "step": {
       "pick": {
         "title": "Klydoclock verbinden",
-        "description": "Diese Geräte bieten ADB in deinem Netz an. Eine Klydoclock erscheint als adb-<Seriennummer>; andere Android-Geräte mit Netzwerk-ADB tauchen hier ebenfalls auf. Nur das ausgewählte Gerät wird kontaktiert und geprüft.",
+        "description": "Diese Geräte bieten ADB in deinem Netz an. Eine Klydoclock erscheint als adb- gefolgt von ihrer Seriennummer; andere Android-Geräte mit Netzwerk-ADB tauchen hier ebenfalls auf. Nur das ausgewählte Gerät wird kontaktiert und geprüft.",
         "data": {
           "device": "Gerät"
         }
